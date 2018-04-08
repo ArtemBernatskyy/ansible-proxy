@@ -1,0 +1,33 @@
+---
+
+- name: Ensure a locale exists
+  locale_gen: name=en_US.UTF-8 state=present
+
+- name: Update server packages
+  become: yes
+  apt: update_cache=yes cache_valid_time=3600
+
+
+- name: Install squid
+  become: yes
+  apt: name=squid
+
+- name: Whitelist our IP
+  become: yes
+  lineinfile: >
+    dest=/etc/squid/squid.conf
+    regexp="http_access allow localhost manager"
+    line="acl k_vm src {{ whitelisted_ip }} \nhttp_access allow k_vm"
+
+- name: Check squid conf file
+  shell: squid -k check
+  register: check_result
+
+- name: Print squid conf check results
+  debug: var=check_result
+
+- name: reload squid
+  become: yes
+  systemd:
+    name: squid
+    state: reloaded

@@ -1,0 +1,3 @@
+[default]
+178.62.230.183 ansible_user=root
+188.166.125.177 ansible_user=root
