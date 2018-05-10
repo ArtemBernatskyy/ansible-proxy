@@ -1,3 +1,1 @@
----
-
-whitelisted_ip: 212.90.62.51
+whitelisted_ip: 'this ip will be changed'

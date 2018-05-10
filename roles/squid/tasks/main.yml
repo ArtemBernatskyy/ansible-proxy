@@ -19,6 +19,13 @@
     regexp="http_access allow localhost manager"
     line="acl k_vm src {{ whitelisted_ip }} \nhttp_access allow k_vm"
 
+- name: Change default port
+  become: yes
+  lineinfile: >
+    dest=/etc/squid/squid.conf
+    regexp="http_port 3128"
+    line="http_port 8080"
+
 - name: Check squid conf file
   shell: squid -k check
   register: check_result
