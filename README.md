@@ -3,11 +3,8 @@
 
 ### How to use
 - Install `ansible`
-- go to digitalocean and create servers
-- put their ips in `inventories/default`
-- put your computer's ip in `group_vars/default.ml`
-- run `ansible-playbook main.yml -i inventories/default`
-- install `https://chrome.google.com/webstore/detail/proxy-switchyomega/padekgcemlokbadohgkifijomclgjgif?hl=nl`
+- get Digitalocean API token and put it in `digital.py`
+- `./digital.py --create 2` to create 2 proxy servers
+- `./digital.py --destroy True` to destroy all proxy servers
 
-
-### [Video tutorial](https://youtu.be/HAnamHPHEKc)
+handy Chrome extension `https://chrome.google.com/webstore/detail/proxy-switchyomega/padekgcemlokbadohgkifijomclgjgif?hl=nl`
