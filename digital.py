@@ -69,7 +69,7 @@ class DigitalBot:
             name=name,
             region='ams3',
             image='ubuntu-16-04-x64',
-            size_slug='1gb',
+            size_slug='s-1vcpu-1gb',      # 1GB RAM, 1 vCPU
             ssh_keys=self.ssh_keys,
             backups=False,
             tags=[self.tag],
