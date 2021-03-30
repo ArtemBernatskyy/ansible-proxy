@@ -5,7 +5,7 @@
 
 - name: Install squid
   become: yes
-  apt: name=squid
+  apt: update_cache=yes name=squid
 
 - name: Whitelist our IP
   become: yes
