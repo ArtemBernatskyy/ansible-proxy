@@ -1,42 +1,15 @@
-import os
 import time
+import yaml
 import random
 import string
-import ruamel.yaml
-import digitalocean
 import urllib.request
+from typing import List
 from optparse import OptionParser
-from ruamel.yaml.util import load_yaml_guess_indent
 
+import digitalocean
+import ansible_runner
 
-class Writer:
-    def __init__(self):
-        self.mashine_ip = None
-        self.group_vars_file = 'group_vars/default.yml'
-
-    def _update_current_ip(self):
-        self.mashine_ip = urllib.request.urlopen('https://ident.me').read().decode('utf8')
-        with open(self.group_vars_file) as file:
-            config, ind, bsi = load_yaml_guess_indent(file)
-        config['whitelisted_ip'] = self.mashine_ip
-        with open(self.group_vars_file, 'w') as file:
-            ruamel.yaml.round_trip_dump(
-                config, file,
-                indent=ind, block_seq_indent=bsi,
-            )
-
-    def _update_servers_ips(self):
-        result_string = '[default]\n'
-        for server_ip in bot.ip_addresses:
-            server_string = f'{server_ip} ansible_user=root\n'
-            result_string += server_string
-        with open('inventories/default', 'w') as file:
-            file.write(result_string)
-            file.close()
-
-    def refresh(self):
-        self._update_current_ip()
-        self._update_servers_ips()
+import config
 
 
 class Droplet:
@@ -46,6 +19,10 @@ class Droplet:
         self.ip_address = None
 
     @property
+    def urn(self):
+        return f"do:droplet:{self.droplet.id}"
+
+    @property
     def is_ready(self):
         if not self.ip_address:
             self.droplet.load()
@@ -53,23 +30,25 @@ class Droplet:
         return self.ip_address is not None
 
 
-class DigitalBot:
+class DoAPI:
+    """Class for working with DigitalOcean's API"""
+
     def __init__(self, token):
         self.token = token
         self.manager = digitalocean.Manager(token=token)
         self.ssh_keys = self.manager.get_all_sshkeys()
-        self.droplets = []
-        self.tag = 'temp'
-        self.ip_addresses = []
+        self.droplets: List[Droplet] = []
+        self.ip_addresses: List[str] = []
+        self.tag = config.DROPLET_TAG
 
-    def create_droplet(self):
-        name = 'Temp-' + ''.join(random.choices(string.digits, k=10))
+    def create_droplet(self, region: str):
+        name = "Temp-" + "".join(random.choices(string.digits, k=10))
         droplet = digitalocean.Droplet(
             token=self.token,
             name=name,
-            region='sfo2',
-            image='ubuntu-20-04-x64',
-            size_slug='s-1vcpu-1gb',      # 1GB RAM, 1 vCPU
+            region=region,
+            image=config.DROPLET_IMAGE,
+            size_slug=config.DROPLET_SIZE_SLUG,
             ssh_keys=self.ssh_keys,
             backups=False,
             tags=[self.tag],
@@ -83,40 +62,60 @@ class DigitalBot:
             droplet.destroy()
 
     def create_batch(self, quantity):
-        counter = 0
-        while counter < quantity:
-            self.create_droplet()
-            counter += 1
-        # waiting for droplets to load
+        for _ in range(quantity):
+            self.create_droplet(region=config.REGION)
+
+        # waiting for droplets to have an IPs
         while not all(droplet.is_ready for droplet in self.droplets):
             time.sleep(1)
-        # printing IPs
+
+        # gathering IPs
         for droplet in self.droplets:
             self.ip_addresses.append(droplet.ip_address)
 
 
-if __name__ == '__main__':
+class AnsibleWriter:
+    """Class for manipulating ansible group vars and inventories"""
+
+    def __init__(self, digital_ocean: DoAPI):
+        self.digital_ocean = digital_ocean
+
+    def _update_group_vars(self):
+        mashine_ip = urllib.request.urlopen("https://ident.me").read().decode("utf8")
+        with open("group_vars/default.yml", "w") as file:
+            yaml.dump({"whitelisted_ip": mashine_ip}, file, default_flow_style=False)
+
+    def _update_inventories(self):
+        result_string = "[default]\n"
+        for server_ip in self.digital_ocean.ip_addresses:
+            server_string = f"{server_ip} ansible_user=root\n"
+            result_string += server_string
+        with open("inventories/default", "w") as file:
+            file.write(result_string)
+            file.close()
+
+    def refresh_variables(self):
+        self._update_group_vars()
+        self._update_inventories()
+
+
+if __name__ == "__main__":
     parser = OptionParser()
-    parser.add_option('--create', dest='create_arg', type='int',
-                      help='Creates Droplets')
-    parser.add_option('--destroy', dest='destroy_arg', type='string',
-                      help='Creates Droplets', default=False)
+    parser.add_option("--create", dest="create_arg", type="int", help="Creates Droplets")
+    parser.add_option("--destroy", dest="destroy_arg", type="string", help="Creates Droplets", default=False)
 
     (options, args) = parser.parse_args()
-    writer = Writer()
-    bot = DigitalBot(token='token_goes_here')
+    digital_ocean = DoAPI(token=config.DIGITAL_OCEAN_API_TOKEN)
+    writer = AnsibleWriter(digital_ocean=digital_ocean)
 
     if options.create_arg:
-        print(f'Creating {options.create_arg} droplets, please wait....')
-        bot.create_batch(options.create_arg)
-        print('Done')
-        print('Updating Ansible config files...')
-        writer.refresh()
-        print('Waiting 60s for servers to boot...')
-        time.sleep(60)
-        os.system('ansible-playbook main.yml -i inventories/default')
+        print(f"Creating {options.create_arg} droplets, please wait....")
+        digital_ocean.create_batch(options.create_arg)
+        print("Updating Ansible config files...")
+        writer.refresh_variables()
+        ansible_runner.run(private_data_dir=".", inventory="inventories/default", playbook="playbook.yml")
 
-    elif options.destroy_arg == 'True':
-        print('Destroying All Droplets...')
-        bot.destroy_batch()
-        print('Destroyed. Exiting')
+    elif options.destroy_arg == "True":
+        print("Destroying All Droplets...")
+        digital_ocean.destroy_batch()
+        print("Destroyed. Exiting")

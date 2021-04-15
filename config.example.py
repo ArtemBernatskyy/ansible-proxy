@@ -1,0 +1,5 @@
+DIGITAL_OCEAN_API_TOKEN = "xxxxxxxxxx"
+REGION = "ams3"
+DROPLET_TAG = "temp-1"
+DROPLET_IMAGE = "ubuntu-20-04-x64"
+DROPLET_SIZE_SLUG = "s-1vcpu-1gb"

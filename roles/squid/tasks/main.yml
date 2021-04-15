@@ -1,35 +1,37 @@
 ---
 
-- name: Ensure a locale exists
-  locale_gen: name=en_US.UTF-8 state=present
-
 - name: Install squid
-  become: yes
-  apt: update_cache=yes name=squid
+  apt:
+    name: squid
+    state: present
+    update_cache: yes
+  register: apt_action
+  retries: 100
+  until: apt_action is success or ('Failed to lock apt for exclusive operation' not in apt_action.msg and '/var/lib/dpkg/lock' not in apt_action.msg)
 
 - name: Whitelist our IP
   become: yes
-  lineinfile: >
+  ansible.builtin.lineinfile: >
     dest=/etc/squid/squid.conf
     regexp="http_access allow localhost manager"
     line="acl k_vm src {{ whitelisted_ip }} \nhttp_access allow k_vm"
 
-- name: Change default port
+- name: Change default port to 8080
   become: yes
-  lineinfile: >
+  ansible.builtin.lineinfile: >
     dest=/etc/squid/squid.conf
     regexp="http_port 3128"
     line="http_port 8080"
 
-- name: Check squid conf file
-  shell: squid -k check
+- name: Check squid configuration file
+  ansible.builtin.shell: squid -k check
   register: check_result
 
-- name: Print squid conf check results
-  debug: var=check_result
+- name: Print squid configuration check results
+  ansible.builtin.debug: var=check_result
 
-- name: reload squid
+- name: Reload squid
   become: yes
-  systemd:
+  ansible.builtin.systemd:
     name: squid
     state: reloaded
