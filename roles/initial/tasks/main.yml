@@ -7,3 +7,7 @@
 
 - name: Gathering facts
   ansible.builtin.setup:
+
+- name: Pause for 60 seconds to wait for server to become responsible
+  wait_for:
+    timeout: 60
