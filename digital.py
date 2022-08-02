@@ -1,10 +1,12 @@
 import time
 import yaml
+import json
 import random
 import string
 import urllib.request
 from typing import List
 from optparse import OptionParser
+
 
 import digitalocean
 import ansible_runner
@@ -81,7 +83,8 @@ class AnsibleWriter:
         self.digital_ocean = digital_ocean
 
     def _update_group_vars(self):
-        mashine_ip = urllib.request.urlopen("https://ident.me").read().decode("utf8")
+        with urllib.request.urlopen("https://api.ipify.org/?format=json") as url:
+            mashine_ip = json.loads(url.read().decode())["ip"]
         with open("group_vars/default.yml", "w") as file:
             yaml.dump({"whitelisted_ip": mashine_ip}, file, default_flow_style=False)
 
